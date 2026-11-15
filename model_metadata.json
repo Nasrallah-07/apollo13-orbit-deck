@@ -1,0 +1,12 @@
+{
+  "model_path": "c:\\Users\\Nasrallah\\Downloads\\chat-812c8388-89f0-4c7c-88f6-7e872379485d\\apollo13_fire_risk_xgb.json",
+  "accuracy": 0.955,
+  "best_iteration": 143,
+  "classes": [
+    "GREEN",
+    "YELLOW",
+    "ORANGE",
+    "RED"
+  ],
+  "class_indices": {
+    

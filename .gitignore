@@ -1,0 +1,35 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Heavy data/audio/video files
+audio_part_*.wav
+final_voiceover.wav
+final_voiceover.mp3
+audio_concat.txt
+video_recordings/
+*.webm
+apollo13_orbit_deck_presentation_30s.mp4
+
+# Build artifacts
+dist/
+netlify_deploy/
+
+# Temp scripts
+process_voiceover.py
+record_action_video.py
+startup.py
+
+# Local server
+proxy_8080.py
+start_server.bat
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

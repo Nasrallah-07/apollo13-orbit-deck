@@ -1,0 +1,30 @@
+[
+  {
+    "part": 1,
+    "label": "Part 1 - Intro & Orbit-Deck",
+    "duration": "00:00:06.66",
+    "transcript": "welcome to orbit deck we integrate real Apollo 13 Telemetry into a live NASA 5:45 risk Matrix",
+    "wav": "c:\\Users\\Nasrallah\\Downloads\\chat-812c8388-89f0-4c7c-88f6-7e872379485d\\audio_part_1.wav"
+  },
+  {
+    "part": 2,
+    "label": "Part 2 - Risk Matrix & Telemetry",
+    "duration": "00:00:06.31",
+    "transcript": "analyzing over 6,000 Mission data points to evaluate critical hazards before catastrophic failure",
+    "wav": "c:\\Users\\Nasrallah\\Downloads\\chat-812c8388-89f0-4c7c-88f6-7e872379485d\\audio_part_2.wav"
+  },
+  {
+    "part": 3,
+    "label": "Part 3 - AI Predictor & Model",
+    "duration": "00:00:10.20",
+    "transcript": "switch into our AI predictor backed by an xgboost model at 95% accuracy it predicts risk levels and Confused through thermodynamic flame physics",
+    "wav": "c:\\Users\\Nasrallah\\Downloads\\chat-812c8388-89f0-4c7c-88f6-7e872379485d\\audio_part_3.wav"
+  },
+  {
+    "part": 4,
+    "label": "Part 4 - 3D Flame & Conclusion",
+    "duration": "00:00:06.70",
+    "transcript": "rendering microgravity spherical combustion and radiator heat transfer in real time next Generation airspace safety",
+    "wav": "c:\\Users\\Nasrallah\\Downloads\\chat-812c8388-89f0-4c7c-88f6-7e872379485d\\audio_part_4.wav"
+  }
+]

@@ -1,0 +1,1441 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Apollo 13 â€” AI Fire Risk Predictor</title>
+<style>
+  :root {
+    --bg:       #0A0A1A;
+    --panel:    #0D1B2A;
+    --border:   #1E3A5F;
+    --accent:   #38BDF8;
+    --accent2:  #0EA5E9;
+    --text:     #E2E8F0;
+    --muted:    #64748B;
+    --green:    #00C853;
+    --yellow:   #FFD600;
+    --orange:   #FF6D00;
+    --red:      #D50000;
+    --red-glow: rgba(213,0,0,0.3);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Courier New', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* â”€â”€ Starfield â”€â”€ */
+  #stars {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 20% 50%, #0D1B2A 0%, #0A0A1A 100%);
+  }
+  #stars::before, #stars::after {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      radial-gradient(1px 1px at 20% 30%, #fff 0%, transparent 100%),
+      radial-gradient(1px 1px at 50% 60%, #fff 0%, transparent 100%),
+      radial-gradient(1px 1px at 80% 10%, #fff 0%, transparent 100%),
+      radial-gradient(1px 1px at 70% 80%, #fff 0%, transparent 100%),
+      radial-gradient(1px 1px at 10% 70%, #fff 0%, transparent 100%),
+      radial-gradient(1px 1px at 40% 90%, #fff 0%, transparent 100%),
+      radial-gradient(1px 1px at 90% 50%, #fff 0%, transparent 100%),
+      radial-gradient(1px 1px at 60% 20%, #fff 0%, transparent 100%),
+      radial-gradient(1px 1px at 30% 50%, #fff 0%, transparent 100%),
+      radial-gradient(1px 1px at 85% 35%, #fff 0%, transparent 100%);
+    opacity: 0.4;
+  }
+
+  /* â”€â”€ Layout â”€â”€ */
+  .wrapper { position: relative; z-index: 1; max-width: 1300px; margin: 0 auto; padding: 20px; }
+
+  /* â”€â”€ Header â”€â”€ */
+  header {
+    text-align: center;
+    padding: 30px 20px 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .nasa-badge {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: rgba(56,189,248,0.1);
+    border: 1px solid var(--accent);
+    border-radius: 30px;
+    padding: 6px 18px;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+  .nasa-badge .dot { width:8px; height:8px; border-radius:50%; background:var(--accent); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.4)} }
+
+  h1 { font-size: clamp(1.4rem, 3vw, 2.2rem); letter-spacing: 3px; color: #fff; margin-bottom: 6px; }
+  h1 span { color: var(--accent); }
+  .subtitle { color: var(--muted); font-size: 12px; letter-spacing: 1.5px; }
+
+  /* â”€â”€ Model Info Bar â”€â”€ */
+  .model-bar {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 20px;
+    background: rgba(56,189,248,0.05);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 24px;
+    margin-bottom: 24px;
+    font-size: 11px;
+    letter-spacing: 1px;
+  }
+  .model-stat { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  .model-stat strong { color: var(--accent); font-size: 13px; }
+
+  /* â”€â”€ Grid â”€â”€ */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media(max-width:900px){ .grid{ grid-template-columns:1fr; } }
+
+  /* â”€â”€ Panel â”€â”€ */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .panel-title {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  /* â”€â”€ Form Controls â”€â”€ */
+  .field { margin-bottom: 18px; }
+  .field label {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 7px;
+  }
+  .field label .val {
+    font-size: 13px; font-weight: bold; color: var(--accent);
+    background: rgba(56,189,248,0.1);
+    padding: 2px 10px; border-radius: 5px;
+    min-width: 70px; text-align: right;
+    transition: background 0.3s;
+  }
+  .field label .val.warn { background: rgba(255,109,0,0.2); color: var(--orange); }
+  .field label .val.crit { background: rgba(213,0,0,0.2); color: #ff4444; }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100%; height: 6px;
+    background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--fill,50%), var(--border) var(--fill,50%));
+    border-radius: 3px; outline: none; cursor: pointer;
+    transition: background 0.2s;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px; height: 18px;
+    background: var(--accent); border-radius: 50%;
+    border: 3px solid var(--bg);
+    box-shadow: 0 0 8px var(--accent);
+    cursor: pointer;
+  }
+  input[type=range].warn { background: linear-gradient(to right, var(--orange) 0%, var(--orange) var(--fill,50%), var(--border) var(--fill,50%)); }
+  input[type=range].warn::-webkit-slider-thumb { background: var(--orange); box-shadow: 0 0 8px var(--orange); }
+  input[type=range].crit { background: linear-gradient(to right, var(--red) 0%, var(--red) var(--fill,50%), var(--border) var(--fill,50%)); }
+  input[type=range].crit::-webkit-slider-thumb { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+  select {
+    width: 100%; padding: 10px 14px;
+    background: rgba(56,189,248,0.07);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text); font-family: inherit; font-size: 13px;
+    cursor: pointer; outline: none;
+    transition: border-color 0.2s;
+  }
+  select:focus { border-color: var(--accent); }
+  select option { background: #0D1B2A; }
+
+  .toggle-row { display: flex; align-items: center; gap: 14px; }
+  .toggle {
+    position: relative; width: 50px; height: 26px;
+    background: var(--border); border-radius: 13px;
+    cursor: pointer; transition: background 0.3s;
+    flex-shrink: 0;
+  }
+  .toggle.on { background: var(--red); box-shadow: 0 0 10px var(--red); }
+  .toggle::after {
+    content: '';
+    position: absolute; top: 3px; left: 3px;
+    width: 20px; height: 20px;
+    background: #fff; border-radius: 50%;
+    transition: transform 0.3s;
+  }
+  .toggle.on::after { transform: translateX(24px); }
+  .toggle-label { font-size: 12px; color: var(--muted); }
+  .toggle-label span { color: var(--text); font-weight: bold; }
+
+  /* â”€â”€ Predict Button â”€â”€ */
+  .btn-predict {
+    width: 100%; padding: 16px;
+    background: linear-gradient(135deg, #0EA5E9, #0284C7);
+    border: none; border-radius: 10px;
+    color: #fff; font-family: 'Courier New', monospace;
+    font-size: 15px; font-weight: bold; letter-spacing: 3px;
+    text-transform: uppercase; cursor: pointer;
+    box-shadow: 0 4px 20px rgba(14,165,233,0.4);
+    transition: all 0.2s; margin-top: 10px;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  .btn-predict:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(14,165,233,0.6); }
+  .btn-predict:active { transform: translateY(0); }
+  .btn-predict.loading { background: linear-gradient(135deg, #334155, #1E293B); cursor: wait; }
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: none;
+  }
+  .btn-predict.loading .spinner { display: block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* â”€â”€ Result Panel â”€â”€ */
+  #result-panel { transition: all 0.4s; }
+
+  .risk-badge {
+    text-align: center; padding: 24px;
+    border-radius: 12px; margin-bottom: 20px;
+    border: 2px solid currentColor;
+    transition: all 0.5s;
+    position: relative; overflow: hidden;
+  }
+  .risk-badge::before {
+    content: ''; position: absolute; inset: 0;
+    opacity: 0.08; background: currentColor;
+  }
+  .risk-level { font-size: 2.5rem; font-weight: bold; letter-spacing: 5px; display: block; }
+  .risk-action { font-size: 12px; letter-spacing: 2px; opacity: 0.8; margin-top: 4px; }
+  .risk-confidence { font-size: 28px; font-weight: bold; margin-top: 10px; color: #fff; }
+  .risk-confidence small { font-size: 13px; opacity: 0.6; letter-spacing: 1px; }
+
+  .conf-bar-wrap { margin-bottom: 18px; }
+  .conf-bar-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 5px; }
+  .conf-bar-track { background: var(--border); border-radius: 4px; height: 10px; overflow: hidden; }
+  .conf-bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
+
+  /* â”€â”€ Decoded Info â”€â”€ */
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+  .info-cell {
+    background: rgba(56,189,248,0.05);
+    border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px;
+  }
+  .info-cell .lbl { font-size: 10px; letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase; }
+  .info-cell .vl { font-size: 14px; color: #fff; margin-top: 2px; }
+
+  /* â”€â”€ Feature Importance Chart â”€â”€ */
+  .feat-chart { }
+  .feat-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .feat-name { width: 130px; font-size: 11px; color: var(--muted); text-align: right; flex-shrink: 0; }
+  .feat-track { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .feat-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 4px; }
+  .feat-pct { width: 45px; font-size: 11px; color: var(--accent); text-align: left; }
+
+  /* â”€â”€ Status bar â”€â”€ */
+  .status-bar {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--muted);
+    padding: 8px 0;
+  }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .status-dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .status-dot.offline { background: var(--orange); }
+
+  /* â”€â”€ Placeholder state â”€â”€ */
+  .placeholder {
+    text-align: center; padding: 60px 20px;
+    color: var(--muted);
+  }
+  .placeholder .icon { font-size: 50px; margin-bottom: 14px; opacity: 0.5; }
+  .placeholder p { font-size: 13px; line-height: 1.6; }
+
+  /* â”€â”€ Tooltip â”€â”€ */
+  [data-tip] { position: relative; cursor: help; }
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+    background: #1E3A5F; color: var(--text); font-size: 11px;
+    padding: 5px 10px; border-radius: 6px; white-space: nowrap;
+    pointer-events: none; opacity: 0; transition: opacity 0.2s;
+    z-index: 100;
+  }
+  [data-tip]:hover::after { opacity: 1; }
+
+  /* â”€â”€ Fallback notice â”€â”€ */
+  #fallback-notice {
+    display: none;
+    background: rgba(255,109,0,0.1);
+    border: 1px solid var(--orange);
+    border-radius: 8px; padding: 10px 14px;
+    font-size: 11px; color: var(--orange);
+    margin-bottom: 14px; letter-spacing: 0.5px;
+  }
+
+  /* â”€â”€ Responsive tweaks â”€â”€ */
+  .full-col { grid-column: 1 / -1; }
+
+  footer {
+    text-align: center; padding: 30px 20px;
+    color: var(--muted); font-size: 11px; letter-spacing: 1px;
+    border-top: 1px solid var(--border); margin-top: 30px;
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+  /* â”€â”€ Flame Physics Simulator â”€â”€ */
+  .flame-card {
+    background: radial-gradient(circle at 50% 30%, rgba(20, 35, 60, 0.95), rgba(8, 12, 22, 0.98));
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 16px;
+    box-shadow: inset 0 0 25px rgba(0,0,0,0.7), 0 4px 20px rgba(0,0,0,0.4);
+  }
+  .flame-header {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 12px;
+  }
+  .flame-title { font-size: 11px; letter-spacing: 1.5px; color: var(--accent); font-weight: 700; text-transform: uppercase; }
+  .flame-badge { font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: 700; background: rgba(56,189,248,0.15); color: var(--accent); border: 1px solid rgba(56,189,248,0.3); }
+  .flame-viewport {
+    display: flex; gap: 16px; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; margin-bottom: 10px;
+  }
+  .flame-canvas-box {
+    position: relative; width: 220px; height: 220px;
+    background: #030712; border: 1px solid rgba(56,189,248,0.3);
+    border-radius: 14px; display: flex; align-items: center; justify-content: center;
+    overflow: hidden; box-shadow: inset 0 0 40px rgba(0,0,0,0.98), 0 0 18px rgba(56,189,248,0.08);
+    flex-shrink: 0;
+  }
+  .flame-details { flex: 1; min-width: 210px; font-size: 12px; }
+  .flame-row { margin-bottom: 8px; display: flex; flex-direction: column; gap: 2px; }
+  .flame-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .flame-val { font-size: 13px; font-weight: 600; color: #fff; }
+  .flame-desc { font-size: 11px; color: #94a3b8; line-height: 1.5; margin-top: 6px; background: rgba(0,0,0,0.3); padding: 9px 12px; border-radius: 6px; border-left: 3px solid var(--accent); }
+  /* â”€â”€ Thermodynamics HUD â”€â”€ */
+  .thermo-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+    margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(56,189,248,0.2);
+  }
+  .thermo-cell {
+    background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(56,189,248,0.15);
+    border-radius: 6px; padding: 6px 8px; text-align: center;
+  }
+  .thermo-lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .thermo-val { font-size: 12px; font-weight: 700; color: #fff; margin-top: 2px; }
+  .thermo-sub { font-size: 9px; color: var(--accent); }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+</head>
+<body>
+
+<div id="stars"></div>
+
+<div class="wrapper">
+
+  <!-- HEADER -->
+  <header>
+    <div class="nasa-badge">
+      <div class="dot"></div>
+      NASA MISSION CONTROL Â· APOLLO 13 Â· AI FIRE RISK ANALYSIS
+    </div>
+    <h1>ðŸ”¥ APOLLO 13 <span>AI PREDICTOR</span></h1>
+    <p class="subtitle">REAL-TIME FIRE RISK CLASSIFICATION Â· XGBOOST Â· TRAINED ON NASA TELEMETRY</p>
+  </header>
+
+  <!-- MODEL INFO BAR -->
+  <div class="model-bar">
+    <div class="model-stat" data-tip="XGBoost multi:softprob classifier">
+      ðŸ¤– <strong>XGBoost</strong> Classifier
+    </div>
+    <div class="model-stat" data-tip="Measured on 20% holdout test set">
+      ðŸŽ¯ Accuracy: <strong>~95%</strong>
+    </div>
+    <div class="model-stat" data-tip="Primary + engineered features">
+      ðŸ“Š Features: <strong>14</strong>
+    </div>
+    <div class="model-stat" data-tip="Database: apollo13_numeric_telemetry-1.json">
+      ðŸ“ Database: <strong>apollo13_numeric_telemetry-1.json</strong>
+    </div>
+    <div class="model-stat" data-tip="NASA MSC-02680 Telemetry (6000 points)">
+      ðŸ›¸ Points: <strong>6,000 (NASA)</strong>
+    </div>
+    <div class="model-stat" data-tip="NPR 8715.3C + NASA-STD-8719.13">
+      ðŸ“‹ Standard: <strong>NPR 8715.3C</strong>
+    </div>
+    <div class="model-stat">
+      <span id="api-status-bar">
+        <span class="status-dot" id="api-dot"></span>
+        <span id="api-status-text">Checking API...</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- FALLBACK NOTICE -->
+  <div id="fallback-notice">
+    âš ï¸ FastAPI server offline â€” running in <strong>JS Fallback Mode</strong> (rule-based approximation).
+    Start the server: <code>python -m uvicorn api_server:app --port 8787</code>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="grid">
+
+    <!-- LEFT: INPUT PANEL -->
+    <div class="panel">
+      <div class="panel-title">
+        ðŸ“¡ TELEMETRY INPUTS
+        <span style="margin-left:auto;font-size:10px;color:var(--muted)">NASA MSC-02680</span>
+      </div>
+
+      <!-- MET_H -->
+      <div class="field">
+        <label>
+          Mission Elapsed Time (MET_H) <span class="val" id="v-met_h">55.0 h</span>
+        </label>
+        <input type="range" id="s-met_h" min="0" max="143" step="0.5" value="55"
+               oninput="syncSlider(this,'v-met_h',v=>v.toFixed(1)+' h')" />
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px">
+          <span>0h Launch</span><span style="color:#FFD600">55h Explosion</span><span>143h Splashdown</span>
+        </div>
+      </div>
+
+      <!-- PHASE -->
+      <div class="field">
+        <label>Mission Phase</label>
+        <select id="s-phase">
+          <option value="1">1 â€” Pre-Launch</option>
+          <option value="2">2 â€” Launch</option>
+          <option value="3">3 â€” Earth Orbit</option>
+          <option value="4">4 â€” TLI Burn</option>
+          <option value="5" selected>5 â€” Translunar Coast</option>
+          <option value="6">6 â€” Oâ‚‚ Tank Explosion âš ï¸</option>
+          <option value="7">7 â€” Emergency Response ðŸš¨</option>
+          <option value="8">8 â€” Lifeboat Coast</option>
+          <option value="9">9 â€” Lunar Flyby</option>
+          <option value="10">10 â€” Return Coast</option>
+          <option value="11">11 â€” CM Power Up</option>
+          <option value="12">12 â€” Reentry</option>
+          <option value="13">13 â€” Splashdown</option>
+        </select>
+      </div>
+
+      <!-- HAZARD TYPE -->
+      <div class="field">
+        <label>Hazard Type</label>
+        <select id="s-hazard">
+          <option value="1">1 â€” Electrical Arc</option>
+          <option value="2" selected>2 â€” Oâ‚‚ Enriched Combustion âš¡</option>
+          <option value="3">3 â€” Cryogenic Fuel Leak</option>
+          <option value="4">4 â€” Thermal Runaway</option>
+          <option value="5">5 â€” Pyrotechnic Ignition</option>
+          <option value="6">6 â€” Hypergolic Propellant</option>
+          <option value="7">7 â€” Wiring Insulation Burn</option>
+          <option value="8">8 â€” Pressure Vessel Rupture</option>
+        </select>
+      </div>
+
+      <!-- O2 PSI -->
+      <div class="field">
+        <label>
+          Oâ‚‚ Tank 2 Pressure (O2_PSI) <span class="val" id="v-o2_psi">865.0 psi</span>
+        </label>
+        <input type="range" id="s-o2_psi" min="0" max="1200" step="5" value="865"
+               oninput="syncSlider(this,'v-o2_psi',v=>v.toFixed(0)+' psi','o2_psi')" />
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px">
+          <span>0</span><span style="color:var(--orange)">935 â†’ ALERT</span><span>1200 psi</span>
+        </div>
+      </div>
+
+      <!-- O2 PCT -->
+      <div class="field">
+        <label>
+          Cabin Oâ‚‚ Concentration (O2_PCT) <span class="val" id="v-o2_pct">20.9%</span>
+        </label>
+        <input type="range" id="s-o2_pct" min="15" max="21.5" step="0.1" value="20.9"
+               oninput="syncSlider(this,'v-o2_pct',v=>v.toFixed(1)+'%','o2_pct')" />
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px">
+          <span>15%</span><span>Normal: 20.9%</span><span>21.5%</span>
+        </div>
+      </div>
+
+      <!-- TEMP_F -->
+      <div class="field">
+        <label>
+          SM Bay 4 Temperature (TEMP_F) <span class="val" id="v-temp_f">72.0Â°F</span>
+        </label>
+        <input type="range" id="s-temp_f" min="-50" max="6000" step="10" value="72"
+               oninput="syncSlider(this,'v-temp_f',v=>v.toFixed(0)+'Â°F','temp_f')" />
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px">
+          <span>-50Â°F</span><span style="color:var(--red)">500Â°F â†’ Critical</span><span>6000Â°F</span>
+        </div>
+      </div>
+
+      <!-- IS_ALERT Toggle -->
+      <div class="field">
+        <label>Alert Flag (IS_ALERT)</label>
+        <div class="toggle-row">
+          <div class="toggle" id="toggle-alert" onclick="toggleAlert()"></div>
+          <div class="toggle-label">
+            Status: <span id="alert-text">NORMAL (0)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PREDICT BUTTON -->
+      <button class="btn-predict" id="btn-predict" onclick="predict()">
+        <span class="spinner" id="spin"></span>
+        <span id="btn-text">ðŸ”® PREDICT FIRE RISK</span>
+      </button>
+
+      <div class="status-bar" style="margin-top:14px">
+        <div class="status-dot" id="dot"></div>
+        <span id="status-msg">Ready â€” configure telemetry above and click Predict</span>
+      </div>
+    </div>
+
+    <!-- RIGHT: RESULT PANEL -->
+    <div class="panel" id="result-panel">
+      <div class="panel-title">ðŸŽ¯ AI PREDICTION RESULT</div>
+
+      <!-- Placeholder -->
+      <div class="placeholder" id="placeholder">
+        <div class="icon">ðŸ›¸</div>
+        <p>Configure telemetry inputs on the left<br/>and click <strong>ðŸ”® PREDICT</strong><br/>to get real-time AI risk classification.</p>
+      </div>
+
+      <!-- Result (hidden until prediction) -->
+      <div id="result-content" style="display:none">
+
+        <!-- Risk Badge -->
+        <div class="risk-badge" id="risk-badge">
+          <span class="risk-level" id="risk-level-text">GREEN</span>
+          <div class="risk-action" id="risk-action-text">Monitor â€” Low Risk</div>
+          <div class="risk-confidence">
+            <span id="conf-pct">0</span>%
+            <small> CONFIDENCE</small>
+          </div>
+        </div>
+
+        <!-- Decoded Info -->
+        <div class="info-grid">
+          <div class="info-cell">
+            <div class="lbl">Phase</div>
+            <div class="vl" id="d-phase">â€”</div>
+          </div>
+          <div class="info-cell">
+            <div class="lbl">Hazard</div>
+            <div class="vl" id="d-hazard">â€”</div>
+          </div>
+          <div class="info-cell">
+            <div class="lbl">MET (HH:MM)</div>
+            <div class="vl" id="d-met">â€”</div>
+          </div>
+          <div class="info-cell">
+            <div class="lbl">RPN Range</div>
+            <div class="vl" id="d-rpn">â€”</div>
+          </div>
+        </div>
+
+        <!-- Probability Bars -->
+        <div style="margin-bottom:16px">
+          <div style="font-size:11px;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-bottom:12px">
+            Class Probabilities
+          </div>
+          <div class="conf-bar-wrap">
+            <div class="conf-bar-label"><span>ðŸŸ¢ GREEN</span><span id="p-green">0%</span></div>
+            <div class="conf-bar-track"><div class="conf-bar-fill" id="b-green" style="width:0%;background:#00C853"></div></div>
+          </div>
+          <div class="conf-bar-wrap">
+            <div class="conf-bar-label"><span>ðŸŸ¡ YELLOW</span><span id="p-yellow">0%</span></div>
+            <div class="conf-bar-track"><div class="conf-bar-fill" id="b-yellow" style="width:0%;background:#FFD600"></div></div>
+          </div>
+          <div class="conf-bar-wrap">
+            <div class="conf-bar-label"><span>ðŸŸ  ORANGE</span><span id="p-orange">0%</span></div>
+            <div class="conf-bar-track"><div class="conf-bar-fill" id="b-orange" style="width:0%;background:#FF6D00"></div></div>
+          </div>
+          <div class="conf-bar-wrap">
+            <div class="conf-bar-label"><span>ðŸ”´ RED</span><span id="p-red">0%</span></div>
+            <div class="conf-bar-track"><div class="conf-bar-fill" id="b-red" style="width:0%;background:#D50000"></div></div>
+          </div>
+        </div>
+
+        <!-- FLAME PHYSICS SIMULATOR (NASA G=0 vs 1G) -->
+        <div class="flame-card">
+          <div class="flame-header">
+            <span class="flame-title">ðŸ”¥ NASA MICROGRAVITY FLAME Â· Morphology & Color</span>
+            <span class="flame-badge" id="flame-g-badge">0G (Microgravity)</span>
+          </div>
+
+          <div class="flame-viewport">
+            <!-- Animated Canvas -->
+            <div class="flame-canvas-box">
+              <canvas id="flame-canvas" width="220" height="220"></canvas>
+            </div>
+
+            <!-- Details -->
+            <div class="flame-details">
+              <div class="flame-row">
+                <span class="flame-lbl">ðŸ”® Flame Morphology (Shape)</span>
+                <span class="flame-val" id="flame-shape-text">Spherical Flame Ball (0G Sphere)</span>
+              </div>
+              <div class="flame-row">
+                <span class="flame-lbl">ðŸŽ¨ Flame Color & Emission (Color)</span>
+                <span class="flame-val" id="flame-color-text">Pale Blue / Cyan Chemiluminescence</span>
+              </div>
+              <div class="flame-row">
+                <span class="flame-lbl">ðŸ’¨ Gas Buoyancy & Soot (Buoyancy)</span>
+                <span class="flame-val" id="flame-soot-text" style="font-size:11px;color:#38bdf8">Zero Convective Draft (Zero Soot)</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="flame-desc" id="flame-desc-text">
+            Microgravity (G=0): Absence of Archimedean buoyancy; hot air does not rise. Oxygen diffuses isotropically across 360Â° via Fickian molecular diffusion, producing a symmetrical spherical flame ball.
+          </div>
+
+          <!-- THERMODYNAMICS & FLUID MECHANICS HUD -->
+          <div class="thermo-grid">
+            <div class="thermo-cell" data-tip="Aspect Ratio AR = Height / Width (1.00 = Spherically Symmetric)">
+              <div class="thermo-lbl">Aspect Ratio (AR)</div>
+              <div class="thermo-val" id="th-ar">1.00</div>
+              <div class="thermo-sub" id="th-ar-sub">H/W (0G Sphere)</div>
+            </div>
+            <div class="thermo-cell" data-tip="Flame Temperature via Enthalpy Balance (Burke-Schumann)">
+              <div class="thermo-lbl">Flame Temp (Tf)</div>
+              <div class="thermo-val" id="th-temp">912 K</div>
+              <div class="thermo-sub" id="th-temp-sub">1182 Â°F</div>
+            </div>
+            <div class="thermo-cell" data-tip="Grashof Number: Buoyant force / Viscous force">
+              <div class="thermo-lbl">Grashof (Gr)</div>
+              <div class="thermo-val" id="th-gr">0.00e+00</div>
+              <div class="thermo-sub" id="th-gr-sub">Zero Buoyancy</div>
+            </div>
+            <div class="thermo-cell" data-tip="Burke-Schumann Diffusion Flame Standoff Radius">
+              <div class="thermo-lbl">Flame Radius (rf)</div>
+              <div class="thermo-val" id="th-rf">9.9 mm</div>
+              <div class="thermo-sub">Diffusion Boundary</div>
+            </div>
+            <div class="thermo-cell" data-tip="Wien's Displacement Law Peak Emission">
+              <div class="thermo-lbl">Peak Emission (Î»)</div>
+              <div class="thermo-val" id="th-lambda">3177 nm</div>
+              <div class="thermo-sub">Blackbody / Rad.</div>
+            </div>
+            <div class="thermo-cell" data-tip="Governing Transport Equation">
+              <div class="thermo-lbl">Transport Law</div>
+              <div class="thermo-val" id="th-law" style="font-size:10px">Fick's Diffusion</div>
+              <div class="thermo-sub">Molecular 360Â°</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mode tag -->
+        <div style="font-size:10px;color:var(--muted);text-align:right;margin-top:-8px;margin-bottom:16px">
+          <span id="mode-tag">ðŸ¤– XGBoost API</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- BOTTOM LEFT: Feature Importance -->
+    <div class="panel">
+      <div class="panel-title">ðŸ“Š MODEL FEATURE IMPORTANCE</div>
+      <div class="feat-chart">
+        <div class="feat-row">
+          <div class="feat-name">phase</div>
+          <div class="feat-track"><div class="feat-fill" style="width:100%"></div></div>
+          <div class="feat-pct">42.19%</div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-name">o2_psi</div>
+          <div class="feat-track"><div class="feat-fill" style="width:48.4%"></div></div>
+          <div class="feat-pct">20.41%</div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-name">met_h</div>
+          <div class="feat-track"><div class="feat-fill" style="width:43.8%"></div></div>
+          <div class="feat-pct">18.50%</div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-name">o2_psi_roll5</div>
+          <div class="feat-track"><div class="feat-fill" style="width:9.9%"></div></div>
+          <div class="feat-pct">4.16%</div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-name">o2_psi_x_pct</div>
+          <div class="feat-track"><div class="feat-fill" style="width:9.8%"></div></div>
+          <div class="feat-pct">4.13%</div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-name">hazard_type</div>
+          <div class="feat-track"><div class="feat-fill" style="width:7%"></div></div>
+          <div class="feat-pct">2.95%</div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-name">temp_f</div>
+          <div class="feat-track"><div class="feat-fill" style="width:5.5%"></div></div>
+          <div class="feat-pct">2.31%</div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-name">Other (7)</div>
+          <div class="feat-track"><div class="feat-fill" style="width:12.7%;opacity:0.5"></div></div>
+          <div class="feat-pct">5.35%</div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:16px;border-top:1px solid var(--border);padding-top:12px">
+        ðŸ’¡ <strong>phase</strong> is the most predictive feature (42%) â€” matches NASA's mission-phase risk matrix.
+        <strong>o2_psi</strong> (20%) captures the Oâ‚‚ Tank 2 pressure anomaly signature of the Apr 13, 1970 explosion.
+      </div>
+    </div>
+
+    <!-- BOTTOM RIGHT: Apollo 13 Event Timeline -->
+    <div class="panel">
+      <div class="panel-title">ðŸ“… APOLLO 13 RISK TIMELINE</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px">
+        Key telemetry events â€” click to load into predictor
+      </div>
+
+      <div id="timeline-events"></div>
+    </div>
+
+  </div><!-- /grid -->
+</div><!-- /wrapper -->
+
+<footer>
+  Apollo 13 AI Fire Risk Predictor Â· XGBoost trained on NASA MSC-02680 Telemetry Â·
+  Standard: <a href="https://nodis3.gsfc.nasa.gov/npg_img/N_PR_8715_003C_/N_PR_8715_003C_.pdf" target="_blank">NPR 8715.3C</a> Â·
+  Built with FastAPI + XGBoost Â· v1.0
+</footer>
+
+<script>
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// CONFIG
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+const API_URL = window.location.origin;
+let   apiOnline = false;
+let   alertOn   = false;
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// TIMELINE EVENTS (presets)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+const EVENTS = [
+  { label:'ðŸš€ T+0 Launch',         met:0,    phase:2, hz:5, o2:900, pct:20.9, temp:72,  alert:0, desc:'Liftoff SA-508' },
+  { label:'ðŸŒ Earth Orbit',         met:3,    phase:3, hz:3, o2:880, pct:20.9, temp:68,  alert:0, desc:'S-IVB parking orbit' },
+  { label:'ðŸ”¥ TLI Burn',           met:5.5,  phase:4, hz:5, o2:870, pct:20.9, temp:85,  alert:0, desc:'Trans-Lunar Injection' },
+  { label:'ðŸ’¥ Oâ‚‚ Tank Explosion',  met:55.9, phase:6, hz:2, o2:1150,pct:21.5,temp:900, alert:1, desc:'Sector 4 Oâ‚‚ Tank 2 rupture' },
+  { label:'ðŸš¨ Emergency Response', met:56.5, phase:7, hz:4, o2:200, pct:19.5, temp:450, alert:1, desc:'LM lifeboat activation' },
+  { label:'ðŸŒ™ Lunar Flyby',        met:77,   phase:9, hz:3, o2:150, pct:18.0, temp:38,  alert:0, desc:'Free-return trajectory' },
+  { label:'âš¡ CM Power Up',        met:132,  phase:11,hz:1, o2:120, pct:20.5, temp:52,  alert:1, desc:'CM reactivation sequence' },
+  { label:'ðŸŒŠ Splashdown',         met:142.9,phase:13,hz:7, o2:100, pct:20.9, temp:72,  alert:0, desc:'Pacific Ocean recovery' },
+];
+
+function buildTimeline() {
+  const el = document.getElementById('timeline-events');
+  el.innerHTML = EVENTS.map((e,i) => `
+    <div onclick="loadPreset(${i})" style="
+      display:flex; align-items:center; gap:12px;
+      padding:9px 12px; margin-bottom:7px;
+      background:rgba(56,189,248,0.04);
+      border:1px solid var(--border); border-radius:8px;
+      cursor:pointer; transition:all 0.2s;
+      font-size:12px;
+    "
+    onmouseover="this.style.borderColor='var(--accent)';this.style.background='rgba(56,189,248,0.1)'"
+    onmouseout="this.style.borderColor='var(--border)';this.style.background='rgba(56,189,248,0.04)'">
+      <div style="font-size:14px;width:30px;text-align:center">${e.label.split(' ')[0]}</div>
+      <div style="flex:1">
+        <div style="color:var(--text);font-weight:bold">${e.label.replace(/^[^\s]+\s/,'')}</div>
+        <div style="color:var(--muted);font-size:10px">MET ${e.met}h Â· ${e.desc}</div>
+      </div>
+      <div style="color:var(--accent);font-size:10px">â–¶ Load</div>
+    </div>
+  `).join('');
+}
+buildTimeline();
+
+function loadPreset(i) {
+  const e = EVENTS[i];
+  setSlider('met_h',  e.met,  'v-met_h',  v => v.toFixed(1)+' h');
+  setSlider('o2_psi', e.o2,   'v-o2_psi', v => v.toFixed(0)+' psi', 'o2_psi');
+  setSlider('o2_pct', e.pct,  'v-o2_pct', v => v.toFixed(1)+'%',   'o2_pct');
+  setSlider('temp_f', e.temp, 'v-temp_f', v => v.toFixed(0)+'Â°F',  'temp_f');
+  document.getElementById('s-phase').value  = e.phase;
+  document.getElementById('s-hazard').value = e.hz;
+  alertOn = e.alert === 1;
+  const tog = document.getElementById('toggle-alert');
+  tog.classList.toggle('on', alertOn);
+  document.getElementById('alert-text').textContent = alertOn ? 'ALERT (1)' : 'NORMAL (0)';
+  predict();
+}
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// SLIDER HELPERS
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+function setSlider(id, val, labelId, fmt, warnKey) {
+  const el = document.getElementById('s-'+id);
+  el.value = val;
+  const pct = ((val - el.min) / (el.max - el.min)) * 100;
+  el.style.setProperty('--fill', pct+'%');
+  const lbl = document.getElementById(labelId);
+  lbl.textContent = fmt(parseFloat(val));
+  applyWarn(el, lbl, warnKey, val);
+}
+
+function syncSlider(el, labelId, fmt, warnKey) {
+  const val = parseFloat(el.value);
+  const pct = ((val - el.min) / (el.max - el.min)) * 100;
+  el.style.setProperty('--fill', pct+'%');
+  const lbl = document.getElementById(labelId);
+  lbl.textContent = fmt(val);
+  applyWarn(el, lbl, warnKey, val);
+}
+
+function applyWarn(el, lbl, key, val) {
+  el.classList.remove('warn','crit');
+  lbl.classList.remove('warn','crit');
+  if (!key) return;
+  if (key === 'o2_psi') {
+    if (val >= 1000) { el.classList.add('crit'); lbl.classList.add('crit'); }
+    else if (val >= 935) { el.classList.add('warn'); lbl.classList.add('warn'); }
+  }
+  if (key === 'o2_pct') {
+    if (val >= 21.3) { el.classList.add('warn'); lbl.classList.add('warn'); }
+  }
+  if (key === 'temp_f') {
+    if (val >= 1000) { el.classList.add('crit'); lbl.classList.add('crit'); }
+    else if (val >= 300) { el.classList.add('warn'); lbl.classList.add('warn'); }
+  }
+}
+
+// Init sliders fill on load
+document.querySelectorAll('input[type=range]').forEach(el => {
+  const pct = ((el.value - el.min) / (el.max - el.min)) * 100;
+  el.style.setProperty('--fill', pct+'%');
+});
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ALERT TOGGLE
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+function toggleAlert() {
+  alertOn = !alertOn;
+  document.getElementById('toggle-alert').classList.toggle('on', alertOn);
+  document.getElementById('alert-text').textContent = alertOn ? 'ALERT (1)' : 'NORMAL (0)';
+}
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// API STATUS CHECK
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+async function checkAPI() {
+  try {
+    const r = await fetch(API_URL+'/', { signal: AbortSignal.timeout(2000) });
+    if (r.ok) {
+      apiOnline = true;
+      document.getElementById('api-dot').className = 'status-dot online';
+      document.getElementById('api-status-text').textContent = 'API Online â€” localhost:8787';
+      document.getElementById('fallback-notice').style.display = 'none';
+    }
+  } catch {
+    apiOnline = false;
+    document.getElementById('api-dot').className = 'status-dot offline';
+    document.getElementById('api-status-text').textContent = 'API Offline â€” JS Fallback Mode';
+    document.getElementById('fallback-notice').style.display = 'block';
+  }
+}
+checkAPI();
+setInterval(checkAPI, 10000);
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// PREDICT
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+async function predict() {
+  const btn  = document.getElementById('btn-predict');
+  const spin = document.getElementById('spin');
+  const txt  = document.getElementById('btn-text');
+
+  btn.classList.add('loading');
+  spin.style.display = 'block';
+  txt.textContent = 'COMPUTING...';
+  document.getElementById('status-msg').textContent = 'Sending telemetry to AI model...';
+
+  const payload = {
+    met_h:       parseFloat(document.getElementById('s-met_h').value),
+    phase:       parseInt(document.getElementById('s-phase').value),
+    hazard_type: parseInt(document.getElementById('s-hazard').value),
+    o2_psi:      parseFloat(document.getElementById('s-o2_psi').value),
+    o2_pct:      parseFloat(document.getElementById('s-o2_pct').value),
+    temp_f:      parseFloat(document.getElementById('s-temp_f').value),
+    is_alert:    alertOn ? 1 : 0,
+  };
+
+  let result;
+  if (apiOnline) {
+    try {
+      const res = await fetch(API_URL+'/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(5000)
+      });
+      result = await res.json();
+      result._mode = 'api';
+    } catch {
+      apiOnline = false;
+      result = fallbackPredict(payload);
+      result._mode = 'fallback';
+    }
+  } else {
+    result = fallbackPredict(payload);
+    result._mode = 'fallback';
+  }
+
+  btn.classList.remove('loading');
+  spin.style.display = 'none';
+  txt.textContent = 'ðŸ”® PREDICT FIRE RISK';
+
+  showResult(result, payload);
+}
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// FALLBACK (rule-based, no API)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+const PHASE_RISK   = [0,1,2,2,3,3,5,5,4,4,3,2,3,1]; // index = phase
+const HAZARD_RISK  = [0,2,4,3,4,2,3,2,3];            // index = hazard
+const PHASE_NAMES  = ['','Pre-Launch','Launch','Earth Orbit','TLI Burn','Translunar Coast',
+                      'Oâ‚‚ Tank Explosion','Emergency Response','Lifeboat Coast','Lunar Flyby',
+                      'Return Coast','CM Power Up','Reentry','Splashdown'];
+const HAZARD_NAMES = ['','Electrical Arc','Oâ‚‚ Enriched Combustion','Cryogenic Fuel Leak',
+                      'Thermal Runaway','Pyrotechnic Ignition','Hypergolic Propellant',
+                      'Wiring Insulation Burn','Pressure Vessel Rupture'];
+const ACTIONS      = ['','Monitor â€” Low Risk','Review Required','Mitigation Required','CRITICAL â€” Mission Hold'];
+
+function fallbackPredict(p) {
+  let score = 0;
+  score += PHASE_RISK[p.phase] || 2;
+  score += HAZARD_RISK[p.hazard_type] || 2;
+  if (p.o2_psi >= 1000) score += 4;
+  else if (p.o2_psi >= 935) score += 2;
+  if (p.temp_f >= 1000) score += 4;
+  else if (p.temp_f >= 300) score += 2;
+  if (p.o2_pct >= 21.3) score += 1;
+  if (p.is_alert) score += 3;
+  score += (p.met_h / 143) * 2;
+
+  let idx;
+  if (score <= 4)       idx = 0;  // GREEN
+  else if (score <= 8)  idx = 1;  // YELLOW
+  else if (score <= 13) idx = 2;  // ORANGE
+  else                  idx = 3;  // RED
+
+  const labels = ['GREEN','YELLOW','ORANGE','RED'];
+  const colors = ['#00C853','#FFD600','#FF6D00','#D50000'];
+  const rpns   = ['1-4','5-9','10-15','16-20'];
+
+  // Softmax-like probabilities
+  const raw = [0,0,0,0].map((_,i) => Math.max(0.01, 1 - Math.abs(i - idx)*0.5));
+  const sum = raw.reduce((a,b)=>a+b,0);
+  const probs = raw.map(v => Math.round(v/sum*10000)/100);
+
+  const hh = String(Math.floor(p.met_h)).padStart(3,'0');
+  const mm = String(Math.round((p.met_h % 1)*60)).padStart(2,'0');
+
+  return {
+    prediction: {
+      risk_level:  labels[idx],
+      class_index: idx,
+      confidence:  probs[idx],
+      color_hex:   colors[idx],
+      rpn_range:   rpns[idx],
+      action:      ACTIONS[idx+1] || ''
+    },
+    flame_physics: computeFlamePhysicsClient(p),
+    probabilities: { GREEN: probs[0], YELLOW: probs[1], ORANGE: probs[2], RED: probs[3] },
+    input_decoded: {
+      phase_name:  PHASE_NAMES[p.phase]  || 'Unknown',
+      hazard_name: HAZARD_NAMES[p.hazard_type] || 'Unknown',
+      met_hhmm:    hh+':'+mm
+    }
+  };
+}
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// NASA MICROGRAVITY COMBUSTION THERMODYNAMICS (CLIENT)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+function computeFlamePhysicsClient(p) {
+  const gMap = {1:9.81, 2:34.3, 3:0.0, 4:14.7, 5:0.0, 6:0.0, 7:0.0, 8:0.0, 9:0.0, 10:0.0, 11:0.0, 12:49.0, 13:9.81};
+  const gAcc = gMap[p.phase] !== undefined ? gMap[p.phase] : 0.0;
+  const gLevel = gAcc / 9.81;
+  const isZeroG = gAcc === 0.0;
+
+  const pBar = (p.o2_psi * 0.0689476) + 1.013;
+  const tInfK = (p.temp_f - 32.0) * (5.0 / 9.0) + 273.15;
+  const yO2 = Math.max(0.05, Math.min(1.0, p.o2_pct / 100.0));
+
+  // Enthalpy balance: Adiabatic & Flame Temp
+  const deltaHc = 42.0e6, cp = 1150.0, s = 3.6;
+  let tAdK = tInfK + (yO2 * deltaHc) / (cp * s * 2.6);
+  if (p.is_alert && p.o2_psi >= 900) tAdK *= 1.25;
+
+  const radFactor = isZeroG ? 0.82 : 0.91;
+  const tFlameK = Math.max(650.0, Math.min(3300.0, tAdK * radFactor));
+  const tFlameF = (tFlameK - 273.15) * 1.8 + 32.0;
+
+  // Fluid Mechanics: Grashof Number Gr = (g * beta * deltaT * L^3) / nu^2
+  const beta = 1.0 / tInfK;
+  const nu = 1.5e-5 * (1.0 / Math.max(0.5, pBar));
+  const lChar = 0.02;
+  const deltaT = Math.max(5.0, tFlameK - tInfK);
+  const gr = isZeroG ? 0.0 : (gAcc * beta * deltaT * Math.pow(lChar, 3)) / Math.pow(nu, 2);
+
+  // Aspect Ratio AR = Height / Width
+  const ar = isZeroG ? 1.00 : Number(Math.max(1.15, Math.min(4.5, 1.0 + 0.38 * Math.pow(gr, 0.25) / 10.0)).toFixed(2));
+
+  // Burke-Schumann diffusion radius (mm)
+  const baseR = isZeroG ? 18.5 : 8.5;
+  const rFlameMm = Number((baseR * Math.sqrt(yO2 / 0.21) * Math.pow(Math.max(0.5, pBar), -0.15)).toFixed(1));
+  const lambdaPeakNm = Math.round(2.898e6 / tFlameK);
+
+  let shape_type = 'spherical', shape_ar = 'Symmetric Spherical Flame Ball (0G Sphere)';
+  let shape_desc = 'Microgravity (G=0): Complete absence of Archimedes buoyancy (Gr=0). Oxygen transport governed strictly by Fickian molecular diffusion across 360Â°, yielding a symmetric spherical flame ball with Aspect Ratio AR=1.00.';
+
+  if (p.is_alert && p.o2_psi >= 950) {
+    shape_type = 'jet';
+    shape_ar = 'Explosive Radial Jet (High-Pressure O2)';
+    shape_desc = `High oxygen pressure (${p.o2_psi.toFixed(0)} psi) generates a jet flow exceeding diffusion velocity, with wide radial dispersion.`;
+  } else if (!isZeroG) {
+    if (gLevel >= 2.0) {
+      shape_type = 'torch';
+      shape_ar = `Hyper-Buoyant Elongated Torch (${gLevel.toFixed(1)}G)`;
+      shape_desc = `Spacecraft acceleration (${gLevel.toFixed(1)}G) raises Grashof number (Gr=${gr.toExponential(1)}), forcefully driving hot gases upward.`;
+    } else {
+      shape_type = 'teardrop';
+      shape_ar = `Standard 1G Teardrop Flame`;
+      shape_desc = `Earth gravity (1G): Archimedean buoyancy (Gr=${gr.toExponential(1)}) lifts hot combustion products upward, forming the classic teardrop geometry (AR=${ar.toFixed(2)}).`;
+    }
+  }
+
+  let color_ar, outer_c, core_c, glow_c, soot;
+  if (p.o2_pct >= 21.5 || (p.o2_psi >= 900 && [2,6,8].includes(p.hazard_type))) {
+    color_ar = 'Electric White/Cyan Incandescent';
+    outer_c = '#00F0FF'; core_c = '#FFFFFF'; glow_c = 'rgba(0, 240, 255, 0.85)';
+    soot = `Planck continuum at ${tFlameK.toFixed(0)}K (${tFlameF.toFixed(0)}Â°F). Complete oxidation with zero soot.`;
+  } else if (p.o2_pct < 18.0 || p.temp_f < 200) {
+    color_ar = 'Smoldering Red / Cool Flame';
+    outer_c = '#FF1744'; core_c = '#B71C1C'; glow_c = 'rgba(255, 23, 68, 0.5)';
+    soot = `Cool flame at ${tFlameK.toFixed(0)}K. Severe oxygen starvation limits complete combustion, producing heavy soot.`;
+  } else if (isZeroG) {
+    color_ar = 'Pale Blue / Cyan Chemiluminescence';
+    outer_c = '#00D4FF'; core_c = '#0091EA'; glow_c = 'rgba(0, 212, 255, 0.75)';
+    soot = 'Chemiluminescent emission: Zero soot formation, clean radiative emission from excited CH* and C2* free radicals.';
+  } else {
+    color_ar = 'Golden Yellow-Orange Soot Incandescence';
+    outer_c = '#FF9100'; core_c = '#FFD600'; glow_c = 'rgba(255, 145, 0, 0.75)';
+    soot = `Carbonaceous soot particle incandescence peaking at wavelength ${lambdaPeakNm}nm.`;
+  }
+
+  return {
+    gravity_g: Number(gLevel.toFixed(2)),
+    gravity_mps2: Number(gAcc.toFixed(2)),
+    is_microgravity: isZeroG,
+    grashof_number: gr.toExponential(2),
+    aspect_ratio: ar,
+    flame_temp_k: Math.round(tFlameK),
+    flame_temp_f: Math.round(tFlameF),
+    flame_radius_mm: rFlameMm,
+    peak_wavelength_nm: lambdaPeakNm,
+    shape_type,
+    shape_title: shape_ar,
+    shape_desc,
+    color_title: color_ar,
+    outer_color: outer_c,
+    core_color: core_c,
+    glow_color: glow_c,
+    soot_desc: soot,
+    transport_mechanism: isZeroG ? "Fick's Molecular Diffusion (No Buoyancy)" : "Navier-Stokes Buoyant Convection"
+  };
+}
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// RENDER RESULT
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+function showResult(r, p) {
+  document.getElementById('placeholder').style.display    = 'none';
+  document.getElementById('result-content').style.display = 'block';
+
+  const pred   = r.prediction;
+  const probs  = r.probabilities;
+  const dec    = r.input_decoded;
+  const isAPI  = r._mode === 'api';
+
+  // Badge color
+  const badge = document.getElementById('risk-badge');
+  badge.style.color     = pred.color_hex;
+  badge.style.borderColor = pred.color_hex;
+
+  // Add glow for RED
+  badge.style.boxShadow = pred.risk_level === 'RED'
+    ? `0 0 30px ${pred.color_hex}, 0 0 60px rgba(213,0,0,0.3)` : '';
+
+  document.getElementById('risk-level-text').textContent  = pred.risk_level;
+  document.getElementById('risk-action-text').textContent = pred.action;
+  document.getElementById('conf-pct').textContent         = pred.confidence.toFixed(1);
+
+  // Decoded info
+  document.getElementById('d-phase').textContent  = dec.phase_name;
+  document.getElementById('d-hazard').textContent = dec.hazard_name;
+  document.getElementById('d-met').textContent    = 'MET '+dec.met_hhmm;
+  document.getElementById('d-rpn').textContent    = 'RPN '+pred.rpn_range;
+
+  // Probability bars
+  const pmap = { green: probs.GREEN, yellow: probs.YELLOW, orange: probs.ORANGE, red: probs.RED };
+  ['green','yellow','orange','red'].forEach(c => {
+    const v = pmap[c] || 0;
+    document.getElementById('p-'+c).textContent = v.toFixed(1)+'%';
+    document.getElementById('b-'+c).style.width = Math.min(v,100)+'%';
+  });
+
+  // Mode tag
+  document.getElementById('mode-tag').textContent = isAPI
+    ? 'ðŸ¤– XGBoost API â€” localhost:8787'
+    : 'âš¡ JS Fallback Mode (rule-based)';
+
+  // Status message
+  document.getElementById('dot').className = 'status-dot online';
+  document.getElementById('status-msg').textContent =
+    `âœ… Prediction complete â€” ${isAPI ? 'XGBoost model' : 'JS fallback'} Â· Risk: ${pred.risk_level} (${pred.confidence.toFixed(1)}%)`;
+
+  // â”€â”€ UPDATE FLAME PHYSICS & THERMODYNAMICS HUD â”€â”€
+  const flame = r.flame_physics || computeFlamePhysicsClient(p);
+  currentFlame = flame;
+
+  const gBadge = document.getElementById('flame-g-badge');
+  gBadge.textContent = flame.is_microgravity 
+    ? '0.0g (Microgravity)' 
+    : `${flame.gravity_g.toFixed(1)}g (Buoyancy)`;
+  gBadge.style.color = flame.is_microgravity ? 'var(--accent)' : '#FFD600';
+  gBadge.style.borderColor = flame.is_microgravity ? 'rgba(56,189,248,0.4)' : 'rgba(255,214,0,0.4)';
+
+  document.getElementById('flame-shape-text').textContent = flame.shape_title;
+  document.getElementById('flame-color-text').textContent = flame.color_title;
+  document.getElementById('flame-soot-text').textContent  = flame.soot_desc;
+  document.getElementById('flame-desc-text').textContent  = flame.shape_desc;
+
+  // Fill Thermodynamics HUD metrics
+  const arEl = document.getElementById('th-ar');
+  if (arEl) arEl.textContent = flame.aspect_ratio ? flame.aspect_ratio.toFixed(2) : (flame.is_microgravity ? '1.00' : '2.50');
+  const arSub = document.getElementById('th-ar-sub');
+  if (arSub) arSub.textContent = flame.is_microgravity ? 'H/W (0G Sphere)' : `H/W (${flame.aspect_ratio}x Teardrop)`;
+
+  const tempEl = document.getElementById('th-temp');
+  if (tempEl) tempEl.textContent = (flame.flame_temp_k || 950) + ' K';
+  const tempSub = document.getElementById('th-temp-sub');
+  if (tempSub) tempSub.textContent = (flame.flame_temp_f || 1250) + ' Â°F';
+
+  const grEl = document.getElementById('th-gr');
+  if (grEl) grEl.textContent = flame.grashof_number || (flame.is_microgravity ? '0.00e+00' : '3.60e+06');
+  const grSub = document.getElementById('th-gr-sub');
+  if (grSub) grSub.textContent = flame.is_microgravity ? 'Zero Buoyancy' : 'Buoyancy-Driven';
+
+  const rfEl = document.getElementById('th-rf');
+  if (rfEl) rfEl.textContent = (flame.flame_radius_mm || 18.0) + ' mm';
+
+  const lamEl = document.getElementById('th-lambda');
+  if (lamEl) lamEl.textContent = (flame.peak_wavelength_nm || 3000) + ' nm';
+
+  const lawEl = document.getElementById('th-law');
+  if (lawEl) lawEl.textContent = flame.is_microgravity ? "Fick's Diffusion" : 'Navier-Stokes';
+
+  if (!flame3DReady && window.THREE) {
+    initFlame3D();
+  } else if (flame3DReady) {
+    for (let i = 0; i < FLAME_P_COUNT; i++) resetFlameParticle3D(i, true);
+  }
+}
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// 3D WEBGL FLAME â€” THREE.JS PARTICLE SYSTEM
+// NASA Microgravity Combustion Physics (NPR 8715.3C)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+let currentFlame = null;
+
+// Three.js globals
+let flameScene, flameCamera, flameRenderer3D;
+let flameParticles3D, flamePos3D, flameCol3D, flameVel3D, flameSize3D;
+let flamePartData = [];
+const FLAME_P_COUNT = 700;
+let flame3DReady = false;
+let flameOrbitAngle = 0;
+
+// Glow sprites (layered halos behind particles)
+let flameGlow3D, glowScene;
+
+function hexToRgbArr(h) {
+  h = (h || '#888888').replace('#','');
+  if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  return [parseInt(h.substr(0,2),16)/255, parseInt(h.substr(2,2),16)/255, parseInt(h.substr(4,2),16)/255];
+}
+
+function initFlame3D() {
+  const canvas = document.getElementById('flame-canvas');
+  if (!canvas || !window.THREE) return;
+
+  // â”€â”€ Scene & Camera â”€â”€
+  flameScene  = new THREE.Scene();
+  flameCamera = new THREE.PerspectiveCamera(52, 1, 0.01, 100);
+  flameCamera.position.set(0, 0.3, 2.9);
+
+  // â”€â”€ Renderer â”€â”€
+  flameRenderer3D = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  flameRenderer3D.setSize(220, 220);
+  flameRenderer3D.setClearColor(0x000000, 0);
+  flameRenderer3D.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  // â”€â”€ Soft background ambient point light (fake IBL) â”€â”€
+  const ambient = new THREE.AmbientLight(0x0a0a1a, 1.0);
+  flameScene.add(ambient);
+
+  // â”€â”€ Particle geometry â”€â”€
+  const geo = new THREE.BufferGeometry();
+  flamePos3D  = new Float32Array(FLAME_P_COUNT * 3);
+  flameCol3D  = new Float32Array(FLAME_P_COUNT * 3);
+  flameSize3D = new Float32Array(FLAME_P_COUNT);
+  geo.setAttribute('position', new THREE.BufferAttribute(flamePos3D, 3));
+  geo.setAttribute('aColor',   new THREE.BufferAttribute(flameCol3D, 3));
+  geo.setAttribute('size',     new THREE.BufferAttribute(flameSize3D, 1));
+
+  // â”€â”€ Custom shader â€” soft gaussian disk particles â”€â”€
+  // NOTE: 'color' is reserved by Three.js â€” use 'aColor' to avoid redefinition error
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: `
+      attribute float size;
+      attribute vec3  aColor;
+      varying   vec3  vColor;
+      void main() {
+        vColor = aColor;
+        vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = size * (220.0 / -mvPos.z);
+        gl_Position  = projectionMatrix * mvPos;
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vColor;
+      void main() {
+        vec2  uv = gl_PointCoord - 0.5;
+        float d  = length(uv);
+        if (d > 0.5) discard;
+        float a = exp(-d * d * 6.5) * 0.93;
+        gl_FragColor = vec4(vColor, a);
+      }
+    `,
+    transparent: true,
+    depthWrite:  false,
+    blending:    THREE.AdditiveBlending,
+  });
+
+  flameParticles3D = new THREE.Points(geo, mat);
+  flameScene.add(flameParticles3D);
+
+  // â”€â”€ Halo glow mesh (large soft sphere behind particles) â”€â”€
+  const haloGeo = new THREE.SphereGeometry(0.22, 16, 16);
+  const haloMat = new THREE.MeshBasicMaterial({
+    color: 0x003366, transparent: true, opacity: 0.18,
+    side: THREE.FrontSide, depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+  flameGlow3D = new THREE.Mesh(haloGeo, haloMat);
+  flameGlow3D.position.y = 0.0;
+  flameScene.add(flameGlow3D);
+
+  // â”€â”€ Init particles â”€â”€
+  flamePartData = [];
+  for (let i = 0; i < FLAME_P_COUNT; i++) {
+    flamePartData.push({ life:0, maxLife:1, x:0, y:0, z:0, vx:0, vy:0, vz:0, age:0 });
+    resetFlameParticle3D(i, true);
+  }
+
+  flame3DReady = true;
+  renderFlame3D();
+}
+
+function resetFlameParticle3D(i, randomLife) {
+  const f       = currentFlame;
+  const isZeroG = f ? f.is_microgravity : true;
+  const ar      = f ? Math.max(1.0, f.aspect_ratio || 1.0) : 1.0;
+  const isJet   = f && f.shape_type === 'jet';
+  const isTorch = f && f.shape_type === 'torch';
+
+  const pd  = flamePartData[i];
+  const spawnSpread = 0.055;
+  pd.x = (Math.random()-0.5)*spawnSpread;
+  pd.y = (Math.random()-0.5)*spawnSpread;
+  pd.z = (Math.random()-0.5)*spawnSpread;
+
+  pd.maxLife = 0.55 + Math.random() * 0.90;
+  pd.life    = randomLife ? Math.random() * pd.maxLife : 0;
+  pd.age     = 0;
+
+  if (isJet) {
+    // â”€â”€ JET: Explosive spherical burst with strong radial velocity â”€â”€
+    const theta = Math.random()*Math.PI*2;
+    const phi   = Math.acos(2*Math.random()-1);
+    const spd   = 0.028 + Math.random()*0.048;
+    pd.vx = Math.sin(phi)*Math.cos(theta)*spd;
+    pd.vy = Math.sin(phi)*Math.sin(theta)*spd * 0.7;
+    pd.vz = Math.cos(phi)*spd;
+    pd.maxLife = 0.4 + Math.random()*0.5;
+
+  } else if (isZeroG) {
+    // â”€â”€ 0G: Perfect Fickian spherical diffusion â”€â”€
+    // Uniform solid angle distribution (true 3D sphere)
+    const theta = Math.random()*Math.PI*2;
+    const phi   = Math.acos(2*Math.random()-1);
+    const spd   = 0.0028 + Math.random()*0.0058;
+    pd.vx = Math.sin(phi)*Math.cos(theta)*spd;
+    pd.vy = Math.sin(phi)*Math.sin(theta)*spd;
+    pd.vz = Math.cos(phi)*spd;
+    pd.maxLife = 0.9 + Math.random()*0.8; // slower â€” diffusion limited
+
+  } else {
+    // â”€â”€ 1G+ BUOYANT: Navier-Stokes convection (Archimedes) â”€â”€
+    // Upward velocity proportional to AR (buoyancy strength)
+    const buoyStrength = isTorch ? 0.030 : 0.017;
+    const baseVy = buoyStrength * Math.sqrt(ar);
+    // Narrow radial spread at base (flame foot)
+    const footR = 0.025 / ar; // narrower for high-G
+    const angle = Math.random()*Math.PI*2;
+    const r     = Math.random()*footR;
+    pd.vx = Math.cos(angle)*r;
+    pd.vy = baseVy + Math.random()*0.016;
+    pd.vz = Math.sin(angle)*r;
+    pd.maxLife = 0.5 + Math.random()*0.65;
+  }
+}
+
+function renderFlame3D() {
+  if (!flame3DReady) return;
+  requestAnimationFrame(renderFlame3D);
+
+  const f       = currentFlame;
+  const isZeroG = f ? f.is_microgravity : true;
+  const ar      = f ? Math.max(1.0, f.aspect_ratio || 1.0) : 1.0;
+  const isJet   = f && f.shape_type === 'jet';
+  const isTorch = f && f.shape_type === 'torch';
+
+  // Parse colors from flame physics
+  const outerHex = f ? (f.outer_color || '#00D4FF') : '#00D4FF';
+  const coreHex  = f ? (f.core_color  || '#FFFFFF') : '#FFFFFF';
+  const glowHex  = f ? (f.glow_color  || '#004488') : '#004488';
+  const oc = hexToRgbArr(outerHex);
+  const cc = hexToRgbArr(coreHex);
+
+  // Update halo glow color
+  if (flameGlow3D) {
+    flameGlow3D.material.color.setRGB(oc[0]*0.5, oc[1]*0.5, oc[2]*0.5);
+    flameGlow3D.material.opacity = isZeroG ? 0.22 : 0.14;
+    flameGlow3D.position.y = isZeroG ? 0.0 : 0.3;
+    flameGlow3D.scale.set(1.0, isZeroG ? 1.0 : ar * 0.55, 1.0);
+  }
+
+  const dt = 0.016; // ~60fps frame delta
+
+  for (let i = 0; i < FLAME_P_COUNT; i++) {
+    const pd = flamePartData[i];
+    pd.life += dt;
+    pd.age  += dt;
+
+    if (pd.life >= pd.maxLife) {
+      resetFlameParticle3D(i, false);
+      continue;
+    }
+
+    // â”€â”€ Physics integration â”€â”€
+    pd.x += pd.vx;
+    pd.y += pd.vy;
+    pd.z += pd.vz;
+
+    if (!isZeroG && !isJet) {
+      // Navier-Stokes squeeze: buoyant plume narrows as it rises (teardrop shape)
+      // The higher a particle is, the more its lateral velocity is damped
+      if (pd.y > 0.01) {
+        const squeeze = Math.max(0.03, 1.0 - pd.y * ar * 0.42);
+        pd.vx *= squeeze;
+        pd.vz *= squeeze;
+      }
+      // Turbulent micro-flicker (chaotic Rayleigh-Taylor instability)
+      pd.vx += (Math.random()-0.5) * 0.0004;
+      pd.vz += (Math.random()-0.5) * 0.0004;
+
+    } else if (isZeroG) {
+      // Fick's law: radial diffusion slows as concentration gradient flattens
+      const r3 = Math.sqrt(pd.x*pd.x + pd.y*pd.y + pd.z*pd.z);
+      if (r3 > 0.05) {
+        const drag = 1.0 - 0.012 * r3 * 60;
+        pd.vx *= Math.max(0.0, drag);
+        pd.vy *= Math.max(0.0, drag);
+        pd.vz *= Math.max(0.0, drag);
+      }
+    } else if (isJet) {
+      // Jet: quick radial deceleration + turbulence
+      pd.vx *= 0.975;
+      pd.vy *= 0.975;
+      pd.vz *= 0.975;
+      pd.vx += (Math.random()-0.5)*0.003;
+      pd.vz += (Math.random()-0.5)*0.003;
+    }
+
+    // â”€â”€ Position â†’ buffer â”€â”€
+    flamePos3D[i*3]   = pd.x;
+    flamePos3D[i*3+1] = pd.y;
+    flamePos3D[i*3+2] = pd.z;
+
+    // â”€â”€ Color: lerp core (birth) â†’ outer (death) â”€â”€
+    const t = Math.min(1.0, pd.life / pd.maxLife);
+    flameCol3D[i*3]   = cc[0] + (oc[0]-cc[0])*t;
+    flameCol3D[i*3+1] = cc[1] + (oc[1]-cc[1])*t;
+    flameCol3D[i*3+2] = cc[2] + (oc[2]-cc[2])*t;
+
+    // â”€â”€ Size: Gaussian envelope â€” peaks at mid-life â”€â”€
+    // Larger near flame center (young), fades out as diffuses
+    const szBase = isZeroG ? 0.22 : (isTorch ? 0.14 : 0.17);
+    flameSize3D[i] = Math.max(0.0, Math.sin(t * Math.PI) * szBase * (0.7 + Math.random()*0.6));
+  }
+
+  // â”€â”€ Slow orbiting camera (3D parallax) â”€â”€
+  flameOrbitAngle += 0.0028; // ~0.16Â°/frame â†’ full orbit in ~38s
+  const camR = isZeroG ? 2.85 : 2.65;
+  const camY = isZeroG ? 0.0 : (isTorch ? 0.55 : 0.4);
+  flameCamera.position.x = Math.sin(flameOrbitAngle) * camR;
+  flameCamera.position.z = Math.cos(flameOrbitAngle) * camR;
+  flameCamera.position.y = camY;
+  flameCamera.lookAt(0, isZeroG ? 0.0 : (ar > 2.5 ? 0.45 : 0.28), 0);
+
+  // â”€â”€ Upload to GPU â”€â”€
+  flameParticles3D.geometry.attributes.position.needsUpdate = true;
+  flameParticles3D.geometry.attributes.aColor.needsUpdate   = true;
+  flameParticles3D.geometry.attributes.size.needsUpdate     = true;
+
+  flameRenderer3D.render(flameScene, flameCamera);
+}
+</script>
+</body>
+</html>
+

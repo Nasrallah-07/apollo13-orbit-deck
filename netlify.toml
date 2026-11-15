@@ -1,0 +1,20 @@
+# Netlify configuration
+[[redirects]]
+  from = "/"
+  to = "/orbit-deck.html"
+  status = 200
+
+[[redirects]]
+  from = "/predict"
+  to = "https://YOUR-BACKEND-URL.railway.app/predict"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/status"
+  to = "https://YOUR-BACKEND-URL.railway.app/status"
+  status = 200
+  force = true
+
+[build]
+  publish = "."

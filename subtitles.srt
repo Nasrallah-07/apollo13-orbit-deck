@@ -1,0 +1,15 @@
+1
+00:00:00,000 --> 00:00:06,660
+Welcome to Orbit-Deck. We integrated real Apollo 13 telemetry into a live NASA 5x4 fire risk matrix...
+
+2
+00:00:06,660 --> 00:00:12,970
+...analyzing over 6,000 mission data points to evaluate critical hazards before catastrophic failure.
+
+3
+00:00:12,970 --> 00:00:23,170
+Switching to our AI Predictor: backed by an XGBoost model at 95% accuracy, it predicts risk levels and computes true thermodynamic flame physics...
+
+4
+00:00:23,170 --> 00:00:29,870
+...rendering microgravity spherical combustion and radiative heat transfer in real time. Next-generation aerospace safety.
